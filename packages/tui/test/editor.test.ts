@@ -2631,6 +2631,51 @@ describe("Editor component", () => {
 			assert.strictEqual(editor.isShowingAutocomplete(), true);
 		});
 
+		it("keeps trailing slash completions in the editor when confirmed", async () => {
+			const editor = new Editor(createTestTUI(), defaultEditorTheme);
+			let submitted: string | undefined;
+			editor.onSubmit = (text) => {
+				submitted = text;
+			};
+			editor.setAutocompleteProvider({
+				triggerCharacters: ["/"],
+				getSuggestions: async () => ({
+					items: [{ value: "/skill:python", label: "/skill:python" }],
+					prefix: "/",
+				}),
+				applyCompletion,
+			});
+
+			editor.setText("Refactor this ");
+			editor.handleInput("/");
+			await flushAutocomplete();
+			editor.handleInput("\r");
+
+			assert.strictEqual(editor.getText(), "Refactor this /skill:python");
+			assert.strictEqual(submitted, undefined);
+		});
+
+		it("submits leading slash completions when confirmed", async () => {
+			const editor = new Editor(createTestTUI(), defaultEditorTheme);
+			let submitted: string | undefined;
+			editor.onSubmit = (text) => {
+				submitted = text;
+			};
+			editor.setAutocompleteProvider({
+				getSuggestions: async () => ({
+					items: [{ value: "/help", label: "/help" }],
+					prefix: "/",
+				}),
+				applyCompletion,
+			});
+
+			editor.handleInput("/");
+			await flushAutocomplete();
+			editor.handleInput("\r");
+
+			assert.strictEqual(submitted, "/help");
+		});
+
 		it("debounces custom triggerCharacters autocomplete while typing", async () => {
 			const editor = new Editor(createTestTUI(), defaultEditorTheme);
 			let suggestionCalls = 0;

@@ -134,6 +134,13 @@ export class CustomEditor extends Editor {
 			return;
 		}
 
+		// Autocomplete owns Tab while its menu is open, even when Tab is also
+		// assigned to an application action such as model cycling.
+		if (this.isShowingAutocomplete() && this.keybindings.matches(data, "tui.input.tab")) {
+			super.handleInput(data);
+			return;
+		}
+
 		// Check all other app actions
 		for (const [action, handler] of this.actionHandlers) {
 			if (action !== "app.interrupt" && action !== "app.exit" && this.keybindings.matches(data, action)) {
