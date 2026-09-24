@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Allowed extensions to trigger slash autocomplete after existing prompt text, and kept trailing slash completions in the editor when confirmed with Enter.
+- Allowed extensions to trigger slash autocomplete after existing prompt text, and made Enter confirm every autocomplete item without also submitting the editor.
 - Fixed `/skill` autocomplete appearing empty when loaded skill names did not contain the letters in `skill` ([#9944](https://github.com/earendil-works/pi/issues/9944)).
 - Fixed path and `@` autocomplete not working after opening wrappers such as `(`, `[`, `{`, `<`, or a backtick, e.g. `(~/Dev<Tab>`.
 - Reduced image stretching in terminals that use the Kitty graphics protocol ([#8938](https://github.com/earendil-works/pi/issues/8938)).

@@ -2655,7 +2655,7 @@ describe("Editor component", () => {
 			assert.strictEqual(submitted, undefined);
 		});
 
-		it("submits leading slash completions when confirmed", async () => {
+		it("keeps leading slash completions in the editor until Enter is pressed again", async () => {
 			const editor = new Editor(createTestTUI(), defaultEditorTheme);
 			let submitted: string | undefined;
 			editor.onSubmit = (text) => {
@@ -2673,6 +2673,10 @@ describe("Editor component", () => {
 			await flushAutocomplete();
 			editor.handleInput("\r");
 
+			assert.strictEqual(editor.getText(), "/help");
+			assert.strictEqual(submitted, undefined);
+
+			editor.handleInput("\r");
 			assert.strictEqual(submitted, "/help");
 		});
 
