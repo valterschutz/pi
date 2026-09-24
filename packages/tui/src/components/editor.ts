@@ -268,7 +268,9 @@ function buildTriggerPattern(triggerCharacters: string[]): RegExp {
 }
 
 function buildDebouncePattern(triggerCharacters: string[]): RegExp {
-	const escapedWithoutAt = triggerCharacters.filter((character) => character !== "@").map(escapeCharacterClass);
+	const escapedWithoutAt = triggerCharacters
+		.filter((character) => character !== "@" && character !== "/")
+		.map(escapeCharacterClass);
 	return new RegExp(
 		`${autocompleteTokenStartSource}(?:@(?:"[^"]*|${unquotedAutocompleteSuffixRegex.source})|[${escapedWithoutAt.join("")}]${unquotedAutocompleteSuffixRegex.source})$`,
 		"u",
@@ -2340,7 +2342,7 @@ export class Editor implements Component, Focusable {
 	private setAutocompleteTriggerCharacters(triggerCharacters: string[]): void {
 		const next = [...DEFAULT_AUTOCOMPLETE_TRIGGER_CHARACTERS];
 		for (const character of triggerCharacters) {
-			if (character.length !== 1 || character === "/" || isWhitespaceChar(character) || next.includes(character)) {
+			if (character.length !== 1 || isWhitespaceChar(character) || next.includes(character)) {
 				continue;
 			}
 			next.push(character);
