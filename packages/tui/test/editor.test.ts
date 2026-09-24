@@ -2597,6 +2597,31 @@ describe("Editor component", () => {
 			assert.strictEqual(editor.isShowingAutocomplete(), true);
 		});
 
+		it("triggers slash autocomplete after existing prompt text", async () => {
+			const editor = new Editor(createTestTUI(), defaultEditorTheme);
+			const requests: string[] = [];
+
+			editor.setAutocompleteProvider({
+				triggerCharacters: ["/"],
+				getSuggestions: async (lines, cursorLine, cursorCol) => {
+					const prefix = lines[cursorLine]!.slice(0, cursorCol);
+					requests.push(prefix);
+					return {
+						items: [{ value: "/skill:python", label: "/skill:python" }],
+						prefix: "/",
+					};
+				},
+				applyCompletion,
+			});
+
+			editor.setText("Refactor this ");
+			editor.handleInput("/");
+			await flushAutocomplete();
+
+			assert.deepStrictEqual(requests, ["Refactor this /"]);
+			assert.strictEqual(editor.isShowingAutocomplete(), true);
+		});
+
 		it("debounces custom triggerCharacters autocomplete while typing", async () => {
 			const editor = new Editor(createTestTUI(), defaultEditorTheme);
 			let suggestionCalls = 0;
