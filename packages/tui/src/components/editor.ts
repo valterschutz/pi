@@ -789,6 +789,10 @@ export class Editor implements Component, Focusable {
 			if (kb.matches(data, "tui.select.confirm")) {
 				const selected = this.autocompleteList.getSelectedItem();
 				if (selected && this.autocompleteProvider) {
+					const currentLine = this.state.lines[this.state.cursorLine] ?? "";
+					const beforePrefix = currentLine.slice(0, this.state.cursorCol - this.autocompletePrefix.length);
+					const shouldSubmit =
+						this.state.cursorLine === 0 && this.autocompletePrefix.startsWith("/") && beforePrefix.trim() === "";
 					this.pushUndoSnapshot();
 					this.lastAction = null;
 					const result = this.autocompleteProvider.applyCompletion(
@@ -802,7 +806,7 @@ export class Editor implements Component, Focusable {
 					this.state.cursorLine = result.cursorLine;
 					this.setCursorCol(result.cursorCol);
 
-					if (this.autocompletePrefix.startsWith("/")) {
+					if (shouldSubmit) {
 						this.cancelAutocomplete();
 						// Fall through to submit
 					} else {

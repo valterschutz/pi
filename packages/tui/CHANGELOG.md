@@ -4,7 +4,8 @@
 
 ### Fixed
 
-- Allowed extensions to trigger slash autocomplete after existing prompt text.
+- Allowed extensions to trigger slash autocomplete after existing prompt text, and kept trailing slash completions in the editor when confirmed with Enter.
+
 ## [0.87.1] - 2026-09-22
 
 ## [0.87.0] - 2026-09-21

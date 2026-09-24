@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Let autocomplete menus consume Tab even when Tab is also assigned to an application action such as model cycling.
+
 ## [0.87.1] - 2026-09-22
 
 ### New Features
