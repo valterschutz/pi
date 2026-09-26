@@ -204,7 +204,9 @@ class ConfigSelectorHeader implements Component {
 		const sep = theme.fg("muted", " · ");
 		const switchHint = this.projectModeAvailable ? keyHint("tui.input.tab", "switch mode") + sep : "";
 		const actionHint =
-			this.writeScope === "project" ? rawKeyHint("space", "cycle inherit/+/-") : rawKeyHint("space", "toggle");
+			this.writeScope === "project"
+				? keyHint("tui.select.toggle", "cycle inherit/+/-")
+				: keyHint("tui.select.toggle", "toggle");
 		const hint = switchHint + actionHint + sep + rawKeyHint("esc", "close");
 		const spacing = Math.max(1, width - visibleWidth(title) - visibleWidth(hint));
 		const scopeHint =
@@ -496,7 +498,7 @@ class ResourceList implements Component, Focusable {
 			this.onSwitchMode?.();
 			return;
 		}
-		if (data === " " || kb.matches(data, "tui.select.confirm")) {
+		if (kb.matches(data, "tui.select.toggle") || kb.matches(data, "tui.select.confirm")) {
 			const entry = this.filteredItems[this.selectedIndex];
 			if (entry?.type === "item" && (this.writeScope === "project" || this.getItemScope(entry.item) === "user")) {
 				const newEnabled = this.toggleResource(entry.item);

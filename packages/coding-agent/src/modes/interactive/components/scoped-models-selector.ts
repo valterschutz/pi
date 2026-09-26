@@ -316,8 +316,8 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 			return;
 		}
 
-		// Toggle on Enter
-		if (kb.matches(data, "tui.select.confirm")) {
+		// Toggle on Space or Enter
+		if (kb.matches(data, "tui.select.toggle") || kb.matches(data, "tui.select.confirm")) {
 			const item = this.filteredItems[this.selectedIndex];
 			if (item) {
 				this.enabledIds = toggle(this.enabledIds, this.allIds, item.fullId);

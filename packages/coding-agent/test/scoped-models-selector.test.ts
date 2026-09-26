@@ -73,6 +73,21 @@ describe("scoped models selector", () => {
 		expect(stripAnsi(selector.render(120).join("\n"))).toContain("all enabled");
 	});
 
+	it("disables only the selected model after enabling all using space", async () => {
+		const models = [
+			{ id: "model-a", name: "Model A", enabled: true },
+			{ id: "model-b", name: "Model B", enabled: false },
+			{ id: "model-c", name: "Model C", enabled: false },
+		];
+		const selector = await createSelector(models);
+
+		selector.handleInput("\x01");
+		selector.handleInput(" ");
+
+		expect(models.map((model) => model.enabled)).toEqual([false, true, true]);
+		expect(getMarkerStates(selector, models)).toEqual([false, true, true]);
+	});
+
 	it("disables only the selected model after enabling all", async () => {
 		const models = [
 			{ id: "model-a", name: "Model A", enabled: true },
