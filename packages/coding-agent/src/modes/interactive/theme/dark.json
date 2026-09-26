@@ -4,6 +4,7 @@
 	"vars": {
 		"cyan": "#00d7ff",
 		"blue": "#5f87ff",
+		"mauve": "#cba6f7",
 		"green": "#b5bd68",
 		"red": "#cc6666",
 		"yellow": "#ffff00",
@@ -73,7 +74,7 @@
 		"syntaxOperator": "#D4D4D4",
 		"syntaxPunctuation": "#D4D4D4",
 
-		"thinkingOff": "darkGray",
+		"thinkingOff": "mauve",
 		"thinkingMinimal": "#6e6e6e",
 		"thinkingLow": "#5f87af",
 		"thinkingMedium": "#81a2be",
