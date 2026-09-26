@@ -195,12 +195,12 @@ describe("FooterComponent width handling", () => {
 		expect(statsLine).toContain("$1.250");
 	});
 
-	it("shows the exact context token count instead of a percentage", () => {
-		const session = createSession({ sessionName: "", contextTokens: 24_601 });
+	it("shows a compact context token count instead of a percentage", () => {
+		const session = createSession({ sessionName: "", contextTokens: 125_696 });
 		const footer = new FooterComponent(session, createFooterData(1));
 
 		const statsLine = stripAnsi(footer.render(120)[1]);
-		expect(statsLine).toContain("24,601/200k");
+		expect(statsLine).toContain("125k/200k");
 		expect(statsLine).not.toContain("12.3%/200k");
 	});
 

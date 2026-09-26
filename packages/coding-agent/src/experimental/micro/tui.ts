@@ -25,7 +25,7 @@ import { AssistantMessageComponent } from "../../modes/interactive/components/as
 import { CustomEditor } from "../../modes/interactive/components/custom-editor.ts";
 import { DynamicBorder } from "../../modes/interactive/components/dynamic-border.ts";
 import { ExtensionSelectorComponent } from "../../modes/interactive/components/extension-selector.ts";
-import { formatTokens } from "../../modes/interactive/components/footer.ts";
+import { formatContextTokens, formatTokens } from "../../modes/interactive/components/footer.ts";
 import { keyText } from "../../modes/interactive/components/keybinding-hints.ts";
 import { LoginDialogComponent } from "../../modes/interactive/components/login-dialog.ts";
 import {
@@ -242,7 +242,7 @@ class MicroTui {
 		stats.push(`$${usage.totalCost.toFixed(3)}`);
 		if (usage.contextWindow > 0) {
 			const automatic = Number(view.conversation.config.threshold ?? 0) > 0 ? " (auto)" : "";
-			const context = `${usage.contextTokens === null ? "?" : usage.contextTokens.toLocaleString("en-US")}/${formatTokens(usage.contextWindow)}${automatic}`;
+			const context = `${usage.contextTokens === null ? "?" : formatContextTokens(usage.contextTokens)}/${formatTokens(usage.contextWindow)}${automatic}`;
 			stats.push(
 				usage.contextPercent !== null && usage.contextPercent > 90
 					? theme.fg("error", context)
