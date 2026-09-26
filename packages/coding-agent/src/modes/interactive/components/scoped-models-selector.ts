@@ -200,12 +200,13 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 			? "all enabled"
 			: `${enabledCount}/${this.allIds.length} enabled${unavailableCount ? ` · ${unavailableCount} unavailable` : ""}`;
 		const parts = [
-			`${keyDisplayText("tui.select.confirm")} toggle`,
+			`${keyDisplayText("tui.select.toggle")} toggle`,
 			`${keyDisplayText("app.models.enableAll")} all`,
 			`${keyDisplayText("app.models.clearAll")} clear`,
 			`${keyDisplayText("app.models.toggleProvider")} provider`,
 			`${keyDisplayText("app.models.reorderUp")}/${keyDisplayText("app.models.reorderDown")} reorder`,
 			`${keyDisplayText("app.models.save")} save`,
+			`${keyDisplayText("tui.select.confirm")} save & close`,
 			countText,
 		];
 		return this.isDirty
@@ -316,8 +317,8 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 			return;
 		}
 
-		// Toggle on Space or Enter
-		if (kb.matches(data, "tui.select.toggle") || kb.matches(data, "tui.select.confirm")) {
+		// Toggle on Space
+		if (kb.matches(data, "tui.select.toggle")) {
 			const item = this.filteredItems[this.selectedIndex];
 			if (item) {
 				this.enabledIds = toggle(this.enabledIds, this.allIds, item.fullId);
@@ -325,6 +326,14 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 				this.refresh();
 				this.notifyChange();
 			}
+			return;
+		}
+
+		// Save and close on Enter
+		if (kb.matches(data, "tui.select.confirm")) {
+			this.callbacks.onPersist(this.enabledIds === null ? null : [...this.enabledIds]);
+			this.isDirty = false;
+			this.callbacks.onCancel();
 			return;
 		}
 

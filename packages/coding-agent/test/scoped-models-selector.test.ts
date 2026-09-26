@@ -97,7 +97,7 @@ describe("scoped models selector", () => {
 		const selector = await createSelector(models);
 
 		selector.handleInput("\x01");
-		selector.handleInput("\r");
+		selector.handleInput(" ");
 
 		expect(models.map((model) => model.enabled)).toEqual([false, true, true]);
 		expect(getMarkerStates(selector, models)).toEqual([false, true, true]);
@@ -115,9 +115,40 @@ describe("scoped models selector", () => {
 		expect(models.map((model) => model.enabled)).toEqual([false, false, false]);
 		expect(getMarkerStates(selector, models)).toEqual([false, false, false]);
 
-		selector.handleInput("\r");
+		selector.handleInput(" ");
 		expect(models.map((model) => model.enabled)).toEqual([true, false, false]);
 		expect(getMarkerStates(selector, models)).toEqual([true, false, false]);
+	});
+
+	it("saves and closes on Enter without toggling the selected model", async () => {
+		const models = [
+			{ id: "model-a", name: "Model A", enabled: true },
+			{ id: "model-b", name: "Model B", enabled: false },
+		];
+		harness = await createHarness({ models });
+		const provider = harness.models[0].provider;
+		const persisted: (string[] | null)[] = [];
+		let cancelled = false;
+		const selector = new ScopedModelsSelectorComponent(
+			{
+				allModels: [...harness.models],
+				enabledModelIds: models.filter((model) => model.enabled).map((model) => `${provider}/${model.id}`),
+			},
+			{
+				onChange: () => {},
+				onPersist: (enabledModelIds) => {
+					persisted.push(enabledModelIds);
+				},
+				onCancel: () => {
+					cancelled = true;
+				},
+			},
+		);
+
+		selector.handleInput("\r");
+
+		expect(persisted).toEqual([[`${provider}/model-a`]]);
+		expect(cancelled).toBe(true);
 	});
 
 	it("restores the all-enabled state after re-enabling the last disabled model", async () => {
@@ -129,10 +160,10 @@ describe("scoped models selector", () => {
 		const selector = await createSelector(models);
 
 		selector.handleInput("\x01"); // enable all -> null
-		selector.handleInput("\r"); // disable model-a; enabled models re-sort first: [b, c, a]
+		selector.handleInput(" "); // disable model-a; enabled models re-sort first: [b, c, a]
 		selector.handleInput("\x1b[B");
 		selector.handleInput("\x1b[B"); // move selection back to model-a
-		selector.handleInput("\r"); // re-enable model-a
+		selector.handleInput(" "); // re-enable model-a
 
 		expect(models.map((model) => model.enabled)).toEqual([true, true, true]);
 		expect(getMarkerStates(selector, models)).toEqual([true, true, true]);
