@@ -120,6 +120,20 @@ Attribution:
 
 For release preparation, publishing, verification, or recovery, load and follow [.pi/skills/release.md](.pi/skills/release.md).
 
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `origin` (valterschutz/pi), via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default canonical labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at repo root. See `docs/agents/domain.md`.
+
 ## User Override
 
 If the user's instructions conflict with any rule in this document, ask for explicit confirmation before overriding. Only then execute their instructions.
