@@ -25,6 +25,7 @@ function createSession(options: {
 	compactionUsage?: AssistantUsage;
 	toolUsage?: AssistantUsage;
 	usingSubscription?: boolean;
+	contextTokens?: number | null;
 }): AgentSession {
 	const usage = options.usage;
 	const entries: Array<Record<string, unknown>> = [];
@@ -78,7 +79,11 @@ function createSession(options: {
 			getSessionName: () => options.sessionName,
 			getCwd: () => "/tmp/project",
 		},
-		getContextUsage: () => ({ contextWindow: 200_000, percent: 12.3 }),
+		getContextUsage: () => ({
+			contextWindow: 200_000,
+			tokens: options.contextTokens === undefined ? 24_600 : options.contextTokens,
+			percent: 12.3,
+		}),
 		modelRuntime: {
 			isUsingSubscription: () => options.usingSubscription ?? false,
 		},
@@ -188,6 +193,15 @@ describe("FooterComponent width handling", () => {
 
 		const statsLine = stripAnsi(footer.render(120)[1]);
 		expect(statsLine).toContain("$1.250");
+	});
+
+	it("shows the exact context token count instead of a percentage", () => {
+		const session = createSession({ sessionName: "", contextTokens: 24_601 });
+		const footer = new FooterComponent(session, createFooterData(1));
+
+		const statsLine = stripAnsi(footer.render(120)[1]);
+		expect(statsLine).toContain("24,601/200k");
+		expect(statsLine).not.toContain("12.3%/200k");
 	});
 
 	it("shows the latest cache hit rate when cache usage is present", () => {
