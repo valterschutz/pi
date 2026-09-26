@@ -109,8 +109,8 @@ export class FooterComponent implements Component {
 		// After compaction, tokens are unknown until the next LLM response.
 		const contextUsage = this.session.getContextUsage();
 		const contextWindow = contextUsage?.contextWindow ?? state.model?.contextWindow ?? 0;
+		const contextTokens = contextUsage?.tokens;
 		const contextPercentValue = contextUsage?.percent ?? 0;
-		const contextPercent = contextUsage?.percent !== null ? contextPercentValue.toFixed(1) : "?";
 
 		// Replace home directory with ~
 		let pwd = formatCwdForFooter(this.session.sessionManager.getCwd(), process.env.HOME || process.env.USERPROFILE);
@@ -146,21 +146,18 @@ export class FooterComponent implements Component {
 			statsParts.push(costStr);
 		}
 
-		// Colorize context percentage based on usage
-		let contextPercentStr: string;
+		// Colorize context usage based on percentage used
+		let contextTokensStr: string;
 		const autoIndicator = this.autoCompactEnabled ? " (auto)" : "";
-		const contextPercentDisplay =
-			contextPercent === "?"
-				? `?/${formatTokens(contextWindow)}${autoIndicator}`
-				: `${contextPercent}%/${formatTokens(contextWindow)}${autoIndicator}`;
+		const contextTokensDisplay = `${contextTokens === null || contextTokens === undefined ? "?" : contextTokens.toLocaleString("en-US")}/${formatTokens(contextWindow)}${autoIndicator}`;
 		if (contextPercentValue > 90) {
-			contextPercentStr = theme.fg("error", contextPercentDisplay);
+			contextTokensStr = theme.fg("error", contextTokensDisplay);
 		} else if (contextPercentValue > 70) {
-			contextPercentStr = theme.fg("warning", contextPercentDisplay);
+			contextTokensStr = theme.fg("warning", contextTokensDisplay);
 		} else {
-			contextPercentStr = contextPercentDisplay;
+			contextTokensStr = contextTokensDisplay;
 		}
-		statsParts.push(contextPercentStr);
+		statsParts.push(contextTokensStr);
 		if (areExperimentalFeaturesEnabled()) {
 			statsParts.push(`${theme.fg("dim", "•")} ${theme.bold(theme.fg("warning", "xp"))}`);
 		}

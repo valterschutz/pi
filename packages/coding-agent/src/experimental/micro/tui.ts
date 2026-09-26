@@ -242,10 +242,7 @@ class MicroTui {
 		stats.push(`$${usage.totalCost.toFixed(3)}`);
 		if (usage.contextWindow > 0) {
 			const automatic = Number(view.conversation.config.threshold ?? 0) > 0 ? " (auto)" : "";
-			const context =
-				usage.contextPercent === null
-					? `?/${formatTokens(usage.contextWindow)}${automatic}`
-					: `${usage.contextPercent.toFixed(1)}%/${formatTokens(usage.contextWindow)}${automatic}`;
+			const context = `${usage.contextTokens === null ? "?" : usage.contextTokens.toLocaleString("en-US")}/${formatTokens(usage.contextWindow)}${automatic}`;
 			stats.push(
 				usage.contextPercent !== null && usage.contextPercent > 90
 					? theme.fg("error", context)
