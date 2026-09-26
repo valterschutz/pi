@@ -29,6 +29,12 @@ export function formatTokens(count: number): string {
 	return `${Math.round(count / 1000000)}M`;
 }
 
+export function formatContextTokens(count: number): string {
+	if (count < 1000) return count.toString();
+	if (count < 1000000) return `${Math.floor(count / 1000)}k`;
+	return `${Math.floor(count / 100000) / 10}M`;
+}
+
 export function formatCwdForFooter(cwd: string, home: string | undefined): string {
 	if (!home) return cwd;
 
@@ -149,7 +155,7 @@ export class FooterComponent implements Component {
 		// Colorize context usage based on percentage used
 		let contextTokensStr: string;
 		const autoIndicator = this.autoCompactEnabled ? " (auto)" : "";
-		const contextTokensDisplay = `${contextTokens === null || contextTokens === undefined ? "?" : contextTokens.toLocaleString("en-US")}/${formatTokens(contextWindow)}${autoIndicator}`;
+		const contextTokensDisplay = `${contextTokens === null || contextTokens === undefined ? "?" : formatContextTokens(contextTokens)}/${formatTokens(contextWindow)}${autoIndicator}`;
 		if (contextPercentValue > 90) {
 			contextTokensStr = theme.fg("error", contextTokensDisplay);
 		} else if (contextPercentValue > 70) {
