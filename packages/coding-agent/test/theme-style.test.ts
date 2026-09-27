@@ -1,9 +1,14 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { colorToHex, styleText } from "@earendil-works/pi-tui";
+import { colorToHex, Markdown, styleText } from "@earendil-works/pi-tui";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadThemeFromPath, setTerminalDefaultColors } from "../src/modes/interactive/theme/theme.ts";
+import {
+	getMarkdownTheme,
+	loadThemeFromPath,
+	setTerminalDefaultColors,
+	setThemeInstance,
+} from "../src/modes/interactive/theme/theme.ts";
 
 const tempDirs: string[] = [];
 
@@ -40,6 +45,26 @@ describe("theme styles", () => {
 		expect(() => theme.style("x", { fg: "notAToken" as never })).toThrow("Unknown theme color: notAToken");
 		// @ts-expect-error background tokens are not foreground colors; use theme.colors.userMessageBg
 		expect(() => theme.style("x", { fg: "userMessageBg" })).toThrow("Unknown theme color: userMessageBg");
+	});
+
+	it("colors Markdown emphasis only when the theme specifies emphasis colors", () => {
+		const plain = loadTheme("dark");
+		expect(plain.markdownBold("bold")).toBe(plain.bold("bold"));
+		expect(plain.markdownItalic("italic")).toBe(plain.italic("italic"));
+
+		const colored = loadTheme("dark", (json) => {
+			json.colors.mdBold = "#f38ba8";
+			json.colors.mdItalic = "#a6e3a1";
+		});
+		setThemeInstance(colored);
+		const markdown = getMarkdownTheme();
+		expect(markdown.bold("bold")).toContain("\x1b[38;2;243;139;168m");
+		expect(markdown.italic("italic")).toContain("\x1b[38;2;166;227;161m");
+		const rendered = new Markdown("**bold** and *italic*", 0, 0, markdown).render(80).join("\n");
+		expect(rendered).toContain("\x1b[38;2;243;139;168m");
+		expect(rendered).toContain("\x1b[38;2;166;227;161m");
+		expect(rendered).not.toContain("**");
+		expect(rendered).not.toContain("*italic*");
 	});
 
 	it("loads OKLCH theme values", () => {

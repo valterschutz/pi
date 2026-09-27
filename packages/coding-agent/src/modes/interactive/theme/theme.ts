@@ -70,6 +70,8 @@ export type ThemeColor =
 	| "customMessageLabel"
 	| "toolTitle"
 	| "toolOutput"
+	| "mdBold"
+	| "mdItalic"
 	| "mdHeading"
 	| "mdLink"
 	| "mdLinkUrl"
@@ -121,7 +123,13 @@ export interface ThemeStyle extends TextAttributes {
 	bg?: ThemeBg | Color;
 }
 
-type OptionalThemeColor = "scrollbarTrack" | "scrollbarThumb" | "thinkingMax" | "searchMatchText";
+type OptionalThemeColor =
+	| "scrollbarTrack"
+	| "scrollbarThumb"
+	| "thinkingMax"
+	| "searchMatchText"
+	| "mdBold"
+	| "mdItalic";
 type OptionalThemeBg = "searchMatchBg";
 
 // ============================================================================
@@ -345,6 +353,16 @@ export class Theme {
 
 	italic(text: string): string {
 		return chalk.italic(text);
+	}
+
+	markdownBold(text: string): string {
+		const bold = this.bold(text);
+		return this.fgAnsi.has("mdBold") ? this.fg("mdBold", bold) : bold;
+	}
+
+	markdownItalic(text: string): string {
+		const italic = this.italic(text);
+		return this.fgAnsi.has("mdItalic") ? this.fg("mdItalic", italic) : italic;
 	}
 
 	underline(text: string): string {
@@ -1119,8 +1137,8 @@ export function getMarkdownTheme(): MarkdownTheme {
 		quoteBorder: (text: string) => theme.fg("mdQuoteBorder", text),
 		hr: (text: string) => theme.fg("mdHr", text),
 		listBullet: (text: string) => theme.fg("mdListBullet", text),
-		bold: (text: string) => theme.bold(text),
-		italic: (text: string) => theme.italic(text),
+		bold: (text: string) => theme.markdownBold(text),
+		italic: (text: string) => theme.markdownItalic(text),
 		underline: (text: string) => theme.underline(text),
 		strikethrough: (text: string) => theme.strikethrough(text),
 		highlightCode: (code: string, lang?: string): string[] => {

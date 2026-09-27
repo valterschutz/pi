@@ -39,7 +39,7 @@
 		},
 		"colors": {
 			"type": "object",
-			"description": "Theme color definitions (scrollbar, thinkingMax, and search highlight colors are optional and use compatible fallbacks)",
+			"description": "Theme color definitions (scrollbar, thinkingMax, search highlight, and Markdown emphasis colors are optional and use compatible fallbacks)",
 			"required": [
 				"accent",
 				"border",
@@ -197,6 +197,14 @@
 				"toolOutput": {
 					"$ref": "#/$defs/colorValue",
 					"description": "Tool execution box output text color"
+				},
+				"mdBold": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Markdown bold text (no color override when omitted)"
+				},
+				"mdItalic": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Markdown italic text (no color override when omitted)"
 				},
 				"mdHeading": {
 					"$ref": "#/$defs/colorValue",
