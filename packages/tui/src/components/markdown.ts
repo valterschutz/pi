@@ -712,27 +712,28 @@ export class Markdown implements Component {
 		};
 		const linkFilePaths = this.options.linkFilePaths !== false && getCapabilities().hyperlinks;
 		const fileLinkCwd = this.options.fileLinkCwd ?? process.cwd();
+		// File references render in the link color, then re-enter the enclosing style.
+		const fileLink = (ref: string, url: string): string => hyperlink(this.theme.link(ref), url) + stylePrefix;
 		// Plain text: link each `path:line` reference, keeping the surrounding style.
 		const applyProseWithFileLinks = (text: string): string => {
 			if (!linkFilePaths) {
 				return applyTextWithNewlines(text);
 			}
-			return applyTextWithNewlines(linkFileReferences(text, fileLinkCwd, (ref, url) => hyperlink(ref, url)));
+			return applyTextWithNewlines(linkFileReferences(text, fileLinkCwd, fileLink));
 		};
-		// Inline code: link the span when it is a single `path:line` reference.
+		// Inline code: a span that is exactly one `path:line` reference renders as a link.
 		const codeWithFileLink = (text: string): string => {
-			const styled = this.theme.code(text);
 			if (!linkFilePaths) {
-				return styled;
+				return this.theme.code(text);
 			}
 			let url: string | undefined;
-			const linked = linkFileReferences(text, fileLinkCwd, (ref, refUrl) => {
+			linkFileReferences(text, fileLinkCwd, (ref, refUrl) => {
 				if (ref === text) {
 					url = refUrl;
 				}
 				return ref;
 			});
-			return url && linked === text ? hyperlink(styled, url) : styled;
+			return url ? fileLink(text, url) : this.theme.code(text);
 		};
 
 		for (const token of tokens) {
