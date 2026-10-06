@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Marked, type Token, Tokenizer, type TokenizerExtension, type Tokens } from "marked";
 import { renderLatex } from "../latex.ts";
 import { getCapabilities, hyperlink, isImageLine } from "../terminal-image.ts";
@@ -226,6 +229,74 @@ export interface MarkdownOptions {
 	transform?: (markdown: string, availableWidth: number) => string;
 	/** Render supported LaTeX math expressions as Unicode text (default: true). */
 	renderLatex?: boolean;
+	/**
+	 * Wrap `path:line[:col]` references to existing files in OSC 8 `file://` hyperlinks
+	 * (default: true when the terminal supports hyperlinks). Relative paths resolve
+	 * against `fileLinkCwd`, which defaults to the process working directory.
+	 */
+	linkFilePaths?: boolean;
+	/** Base directory for resolving relative `path:line` references. */
+	fileLinkCwd?: string;
+}
+
+/**
+ * A `path:line` or `path:line:col` reference in prose. The path needs a letter so that
+ * clock times and ratios (`16:9`) are skipped; existence on disk filters the rest.
+ */
+const FILE_LINE_REFERENCE_REGEX =
+	/(?<![\w/.~@-])((?:~|\.{1,2})?\/?(?:[\w@+.-]*[A-Za-z_][\w@+.-]*)(?:\/[\w@+.-]+)*):(\d+)(?::(\d+))?(?![\w/:])/g;
+
+const FILE_EXISTS_CACHE_LIMIT = 512;
+// Only hits are cached: a file referenced before it is created must link once it exists.
+const fileExistsCache = new Set<string>();
+
+function fileLinkTargetExists(absolutePath: string): boolean {
+	if (fileExistsCache.has(absolutePath)) {
+		return true;
+	}
+	if (!existsSync(absolutePath)) {
+		return false;
+	}
+	if (fileExistsCache.size >= FILE_EXISTS_CACHE_LIMIT) {
+		fileExistsCache.clear();
+	}
+	fileExistsCache.add(absolutePath);
+	return true;
+}
+
+/** Test-only: forget cached file existence lookups. */
+export function resetFileLinkCache(): void {
+	fileExistsCache.clear();
+}
+
+function resolveFileLinkPath(path: string, cwd: string): string {
+	if (path === "~" || path.startsWith("~/")) {
+		const home = process.env.HOME;
+		return home ? resolve(home, path.slice(2)) : resolve(cwd, path);
+	}
+	return isAbsolute(path) ? path : resolve(cwd, path);
+}
+
+/** URL for a file reference: `file:///abs/path#L<line>` or `#L<line>:<col>`. */
+export function fileLineUrl(absolutePath: string, line: string, col?: string): string {
+	return `${pathToFileURL(absolutePath).href}#L${line}${col ? `:${col}` : ""}`;
+}
+
+/**
+ * Replace `path:line[:col]` references to existing files with OSC 8 hyperlinks via `link`.
+ * Returns the text unchanged when nothing matches.
+ */
+export function linkFileReferences(text: string, cwd: string, link: (text: string, url: string) => string): string {
+	if (!text.includes(":")) {
+		return text;
+	}
+	return text.replace(FILE_LINE_REFERENCE_REGEX, (match, path: string, line: string, col?: string) => {
+		const absolutePath = resolveFileLinkPath(path, cwd);
+		if (!fileLinkTargetExists(absolutePath)) {
+			return match;
+		}
+		return link(match, fileLineUrl(absolutePath, line, col));
+	});
 }
 
 interface InlineStyleContext {
@@ -639,6 +710,30 @@ export class Markdown implements Component {
 			const segments: string[] = text.split("\n");
 			return segments.map((segment: string) => applyText(segment)).join("\n");
 		};
+		const linkFilePaths = this.options.linkFilePaths !== false && getCapabilities().hyperlinks;
+		const fileLinkCwd = this.options.fileLinkCwd ?? process.cwd();
+		// Plain text: link each `path:line` reference, keeping the surrounding style.
+		const applyProseWithFileLinks = (text: string): string => {
+			if (!linkFilePaths) {
+				return applyTextWithNewlines(text);
+			}
+			return applyTextWithNewlines(linkFileReferences(text, fileLinkCwd, (ref, url) => hyperlink(ref, url)));
+		};
+		// Inline code: link the span when it is a single `path:line` reference.
+		const codeWithFileLink = (text: string): string => {
+			const styled = this.theme.code(text);
+			if (!linkFilePaths) {
+				return styled;
+			}
+			let url: string | undefined;
+			const linked = linkFileReferences(text, fileLinkCwd, (ref, refUrl) => {
+				if (ref === text) {
+					url = refUrl;
+				}
+				return ref;
+			});
+			return url && linked === text ? hyperlink(styled, url) : styled;
+		};
 
 		for (const token of tokens) {
 			switch (token.type) {
@@ -661,7 +756,7 @@ export class Markdown implements Component {
 					if (token.tokens && token.tokens.length > 0) {
 						result += this.renderInlineTokens(token.tokens, resolvedStyleContext);
 					} else {
-						result += applyTextWithNewlines(token.text);
+						result += applyProseWithFileLinks(token.text);
 					}
 					break;
 
@@ -683,7 +778,7 @@ export class Markdown implements Component {
 				}
 
 				case "codespan":
-					result += this.theme.code(token.text) + stylePrefix;
+					result += codeWithFileLink(token.text) + stylePrefix;
 					break;
 
 				case "link": {
