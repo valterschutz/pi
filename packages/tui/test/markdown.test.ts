@@ -32,7 +32,7 @@ function stripAnsi(line: string): string {
 
 describe("Markdown component", () => {
 	describe("File path links", () => {
-		const osc8 = (text: string, url: string) => `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
+		const osc8 = (text: string, url: string) => `\x1b]8;;${url}\x1b\\${chalk.blue(text)}\x1b]8;;\x1b\\`;
 		let cwd = "";
 
 		const render = (source: string, options?: { linkFilePaths?: boolean; fileLinkCwd?: string }) =>
@@ -75,8 +75,7 @@ describe("Markdown component", () => {
 			setup();
 			const output = render("Look at `src/app.ts:4`.");
 			const url = `${pathToFileURL(join(cwd, "src", "app.ts")).href}#L4`;
-			assert.ok(output.includes(`\x1b]8;;${url}\x1b\\`), output);
-			assert.ok(output.includes("src/app.ts:4"), output);
+			assert.ok(output.includes(osc8("src/app.ts:4", url)), output);
 		});
 
 		it("leaves references to missing files, ratios, and ports alone", () => {
