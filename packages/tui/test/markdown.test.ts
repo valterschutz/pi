@@ -1,8 +1,12 @@
 import assert from "node:assert";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
+import { pathToFileURL } from "node:url";
 import type { Terminal as XtermTerminalType } from "@xterm/headless";
 import { Chalk } from "chalk";
-import { Markdown, type MarkdownTheme } from "../src/components/markdown.ts";
+import { Markdown, type MarkdownTheme, resetFileLinkCache } from "../src/components/markdown.ts";
 import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
 import type { Component, TUI } from "../src/tui.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
@@ -27,6 +31,75 @@ function stripAnsi(line: string): string {
 }
 
 describe("Markdown component", () => {
+	describe("File path links", () => {
+		const osc8 = (text: string, url: string) => `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
+		let cwd = "";
+
+		const render = (source: string, options?: { linkFilePaths?: boolean; fileLinkCwd?: string }) =>
+			new Markdown(source, 0, 0, defaultMarkdownTheme, undefined, { fileLinkCwd: cwd, ...options })
+				.render(120)
+				.join("\n");
+
+		afterEach(() => {
+			resetCapabilitiesCache();
+			resetFileLinkCache();
+			if (cwd) {
+				rmSync(cwd, { recursive: true, force: true });
+				cwd = "";
+			}
+		});
+
+		function setup(): void {
+			cwd = mkdtempSync(join(tmpdir(), "pi-md-links-"));
+			mkdirSync(join(cwd, "src"));
+			writeFileSync(join(cwd, "src", "app.ts"), "export {};\n");
+			setCapabilities({ images: null, trueColor: false, hyperlinks: true });
+		}
+
+		it("links relative path:line references to existing files in prose", () => {
+			setup();
+			const output = render("See src/app.ts:12 for details.");
+			const url = `${pathToFileURL(join(cwd, "src", "app.ts")).href}#L12`;
+			assert.ok(output.includes(osc8("src/app.ts:12", url)), output);
+		});
+
+		it("links absolute path:line:col references and keeps the visible text", () => {
+			setup();
+			const absolute = join(cwd, "src", "app.ts");
+			const output = render(`Fix ${absolute}:3:7 now`);
+			assert.ok(output.includes(osc8(`${absolute}:3:7`, `${pathToFileURL(absolute).href}#L3:7`)), output);
+			assert.ok(stripAnsi(output.replace(/\x1b\]8;;[^\x1b]*\x1b\\/g, "")).includes(`Fix ${absolute}:3:7 now`));
+		});
+
+		it("links inline code spans that are exactly one path:line reference", () => {
+			setup();
+			const output = render("Look at `src/app.ts:4`.");
+			const url = `${pathToFileURL(join(cwd, "src", "app.ts")).href}#L4`;
+			assert.ok(output.includes(`\x1b]8;;${url}\x1b\\`), output);
+			assert.ok(output.includes("src/app.ts:4"), output);
+		});
+
+		it("leaves references to missing files, ratios, and ports alone", () => {
+			setup();
+			const output = render("src/missing.ts:12 and 16:9 and localhost:8080");
+			assert.ok(!output.includes("\x1b]8;;"), output);
+		});
+
+		it("does not link when the terminal lacks hyperlink support or the option is off", () => {
+			setup();
+			assert.ok(!render("src/app.ts:12", { linkFilePaths: false }).includes("\x1b]8;;"));
+			setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+			assert.ok(!render("src/app.ts:12").includes("\x1b]8;;"));
+		});
+
+		it("links a file that appears after it was first referenced", () => {
+			setup();
+			assert.ok(!render("src/later.ts:1").includes("\x1b]8;;"));
+			writeFileSync(join(cwd, "src", "later.ts"), "");
+			assert.ok(render("src/later.ts:1").includes("\x1b]8;;"));
+		});
+	});
+
 	describe("Transforms", () => {
 		it("caches transformed Markdown by source and available width", () => {
 			const calls: Array<{ source: string; availableWidth: number }> = [];
