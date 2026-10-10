@@ -21,6 +21,7 @@ export {
 	type ParsedSkillBlock,
 	type PromptOptions,
 	parseSkillBlock,
+	parseSkillBlocks,
 	type SessionStats,
 } from "./core/agent-session.ts";
 export { readStoredCredential } from "./core/auth-storage.ts";

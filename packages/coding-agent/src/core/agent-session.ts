@@ -160,6 +160,25 @@ export function parseSkillBlock(text: string): ParsedSkillBlock | null {
 	};
 }
 
+/**
+ * Parse consecutive skill blocks from message text, as produced when several skills are invoked in one message.
+ * Returns null if the text doesn't start with a skill block.
+ */
+export function parseSkillBlocks(
+	text: string,
+): { skillBlocks: ParsedSkillBlock[]; userMessage: string | undefined } | null {
+	const skillBlocks: ParsedSkillBlock[] = [];
+	let rest: string | undefined = text;
+	while (rest !== undefined) {
+		const skillBlock = parseSkillBlock(rest);
+		if (!skillBlock) break;
+		skillBlocks.push(skillBlock);
+		rest = skillBlock.userMessage;
+	}
+	if (skillBlocks.length === 0) return null;
+	return { skillBlocks, userMessage: rest };
+}
+
 /** Session-specific events that extend the core AgentEvent */
 export type AgentSessionEvent =
 	| Exclude<AgentEvent, { type: "agent_end" }>
