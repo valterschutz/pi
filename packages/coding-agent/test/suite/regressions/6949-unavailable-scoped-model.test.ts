@@ -85,7 +85,7 @@ describe("issue #6949 unavailable scoped models", () => {
 		const rendered = selector.render(100).join("\n");
 		expect(stripAnsi(rendered)).toContain(`${unavailableId} [unavailable]`);
 		expect(rendered).toContain(theme.strikethrough(unavailableId));
-		selector.handleInput("\r");
+		selector.handleInput(" ");
 		expect(changes).toEqual([[availableId]]);
 		selector.handleInput("\x13");
 		expect(persisted).toEqual([[availableId]]);

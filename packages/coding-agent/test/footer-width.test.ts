@@ -26,6 +26,7 @@ function createSession(options: {
 	toolUsage?: AssistantUsage;
 	usingSubscription?: boolean;
 	contextTokens?: number | null;
+	routedModel?: { model: { id: string }; thinkingLevel?: string };
 }): AgentSession {
 	const usage = options.usage;
 	const entries: Array<Record<string, unknown>> = [];
@@ -76,6 +77,9 @@ function createSession(options: {
 		},
 		sessionManager: {
 			getEntries: () => entries,
+			getEntryCount: () => entries.length,
+			getSessionId: () => "test-session",
+			getLeafId: () => null,
 			getSessionName: () => options.sessionName,
 			getCwd: () => "/tmp/project",
 		},
@@ -84,6 +88,7 @@ function createSession(options: {
 			tokens: options.contextTokens === undefined ? 24_600 : options.contextTokens,
 			percent: 12.3,
 		}),
+		routedModel: options.routedModel,
 		modelRuntime: {
 			isUsingSubscription: () => options.usingSubscription ?? false,
 		},
@@ -157,6 +162,21 @@ describe("FooterComponent width handling", () => {
 		}
 	});
 
+	it("shows the physical model a virtual model routed to", () => {
+		const session = createSession({
+			sessionName: "",
+			modelId: "auto",
+			reasoning: true,
+			thinkingLevel: "high",
+			routedModel: { model: { id: "gpt-5.6-luna" }, thinkingLevel: "medium" },
+		});
+		const footer = new FooterComponent(session, createFooterData(1));
+
+		const statsLine = stripAnsi(footer.render(120)[1]);
+
+		expect(statsLine).toContain("auto \u2022 high \u2192 gpt-5.6-luna \u2022 medium");
+	});
+
 	it("includes summary and tool result usage in the total cost", () => {
 		const session = createSession({
 			sessionName: "",
@@ -204,7 +224,17 @@ describe("FooterComponent width handling", () => {
 		expect(statsLine).not.toContain("12.3%/200k");
 	});
 
-	it("shows the latest cache hit rate when cache usage is present", () => {
+	it("updates cached usage totals after an entry is appended", () => {
+		const usage = { input: 10, output: 1, cacheRead: 0, cacheWrite: 0, cost: { total: 0.5 } };
+		const session = createSession({ sessionName: "", usage });
+		const footer = new FooterComponent(session, createFooterData(1));
+		expect(stripAnsi(footer.render(120)[1])).toContain("$0.500");
+
+		session.sessionManager.getEntries().push({ type: "message", message: { role: "assistant", usage } } as never);
+		expect(stripAnsi(footer.render(120)[1])).toContain("$1.000");
+	});
+
+	it("hides cache read, write and hit-rate stats", () => {
 		const session = createSession({
 			sessionName: "",
 			usage: {
@@ -218,7 +248,7 @@ describe("FooterComponent width handling", () => {
 		const footer = new FooterComponent(session, createFooterData(1));
 
 		const statsLine = stripAnsi(footer.render(120)[1]);
-		expect(statsLine).toContain("CH25.0%");
+		expect(statsLine).not.toMatch(/\bCH|\bR\d|\bW\d/);
 	});
 
 	it("marks Kimi Coding costs as subscription estimates", () => {
