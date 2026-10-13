@@ -2023,8 +2023,7 @@ export class AgentSession {
 		// Expand skill commands (/skill:name args) and prompt templates (/template args)
 		let expandedText = currentText;
 		if (expandPromptTemplates) {
-			expandedText = this._expandSkillCommand(expandedText);
-			expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
+			expandedText = this._expandPromptInput(expandedText);
 		}
 
 		// If streaming, queue via steer() or followUp() based on option
@@ -2158,25 +2157,26 @@ export class AgentSession {
 	}
 
 	/**
-	 * Expand skill commands (/skill:name args) to their full content.
-	 * Returns the expanded text, or the original text if not a skill command or skill not found.
+	 * Expand templates in user text and leading skill commands, never in loaded skill/template bodies.
 	 * Emits errors via extension runner if file read fails.
 	 */
-	private _expandSkillCommand(text: string): string {
-		if (!text.startsWith("/skill:")) return text;
+	private _expandPromptInput(text: string): string {
+		const templates = [...this.promptTemplates];
+		if (!text.startsWith("/skill:")) return expandPromptTemplate(text, templates);
 
 		const spaceIndex = text.indexOf(" ");
 		const skillName = spaceIndex === -1 ? text.slice(7) : text.slice(7, spaceIndex);
 		const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1).trim();
 
 		const skill = this.resourceLoader.getSkills().skills.find((s) => s.name === skillName);
-		if (!skill) return text; // Unknown skill, pass through
+		if (!skill) return expandPromptTemplate(text, templates);
 
 		try {
 			const content = readFileSync(skill.filePath, "utf-8");
 			const body = stripFrontmatter(content).trim();
 			const skillBlock = `<skill name="${skill.name}" location="${skill.filePath}">\nReferences are relative to ${skill.baseDir}.\n\n${body}\n</skill>`;
-			return args ? `${skillBlock}\n\n${args}` : skillBlock;
+			const expandedArgs = expandPromptTemplate(args, templates, { allowLegacyArguments: false });
+			return args ? `${skillBlock}\n\n${expandedArgs}` : skillBlock;
 		} catch (err) {
 			// Emit error like extension commands do
 			this._extensionRunner.emitError({
@@ -2184,7 +2184,7 @@ export class AgentSession {
 				event: "skill_expansion",
 				error: err instanceof Error ? err.message : String(err),
 			});
-			return text; // Return original on error
+			return expandPromptTemplate(text, templates);
 		}
 	}
 
@@ -2206,8 +2206,7 @@ export class AgentSession {
 		);
 		if (!processedInput) return "handled";
 
-		let expandedText = this._expandSkillCommand(processedInput.text);
-		expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
+		const expandedText = this._expandPromptInput(processedInput.text);
 
 		if (behavior === "steer") {
 			await this._queueSteer(expandedText, processedInput.images);

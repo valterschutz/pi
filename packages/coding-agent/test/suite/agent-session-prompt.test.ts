@@ -6,9 +6,11 @@ import { fauxAssistantMessage, fauxToolCall, type Model } from "@earendil-works/
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExtensionAPI, InputEvent } from "../../src/core/extensions/index.ts";
+import { writeRawStdout } from "../../src/core/output-guard.ts";
 import type { PromptTemplate } from "../../src/core/prompt-templates.ts";
 import { createSyntheticSourceInfo } from "../../src/core/source-info.ts";
-import { createTestResourceLoader } from "../utilities.ts";
+import { runPrintMode } from "../../src/modes/print-mode.ts";
+import { createTestExtensionsResult, createTestResourceLoader } from "../utilities.ts";
 import { createHarness, getMessageText, type Harness } from "./harness.ts";
 
 const processImage = vi.hoisted(() =>
@@ -20,6 +22,11 @@ const processImage = vi.hoisted(() =>
 	})),
 );
 vi.mock("../../src/utils/image-process.ts", () => ({ processImage }));
+vi.mock("../../src/core/output-guard.ts", () => ({
+	writeRawStdout: vi.fn(),
+	flushRawStdout: async () => {},
+	waitForRawStdoutBackpressure: async () => {},
+}));
 
 const TINY_PNG_BASE64 =
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
@@ -275,6 +282,213 @@ describe("AgentSession prompt characterization", () => {
 		await harness.session.prompt("/review src/index.ts");
 
 		expect(expandedPrompt).toBe("Review this code: src/index.ts");
+	});
+
+	it("expands inline templates through API prompts while preserving paths, code, and escapes", async () => {
+		const template: PromptTemplate = {
+			name: "ship",
+			description: "Ship",
+			content: "Ship[$@]",
+			filePath: "/virtual/ship.md",
+			sourceInfo: createSyntheticSourceInfo("/virtual/ship.md", { source: "local" }),
+		};
+		const harness = await createHarness({
+			resourceLoader: {
+				...createTestResourceLoader(),
+				getPrompts: () => ({ prompts: [template], diagnostics: [] }),
+			},
+		});
+		harnesses.push(harness);
+		harness.setResponses([fauxAssistantMessage("ok")]);
+		await harness.session.prompt(
+			'Please (/ship), /ship("fix typo") then `/ship` src/ship /ship/file https://host/ship \\/ship',
+		);
+		expect(getMessageText(harness.session.messages[1])).toBe(
+			"Please (Ship[]), Ship[fix typo] then `/ship` src/ship /ship/file https://host/ship /ship",
+		);
+	});
+
+	it("expands templates in a core skill user tail but not the loaded skill or template body", async () => {
+		const tempDir = join(tmpdir(), `pi-skill-inline-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		mkdirSync(tempDir, { recursive: true });
+		tempDirs.push(tempDir);
+		const skillPath = join(tempDir, "test.md");
+		writeFileSync(skillPath, "Skill body: /ship");
+		const template: PromptTemplate = {
+			name: "ship",
+			description: "Ship",
+			content: "Ship[$@] /skill:test /ship",
+			filePath: "/virtual/ship.md",
+			sourceInfo: createSyntheticSourceInfo("/virtual/ship.md", { source: "local" }),
+		};
+		const harness = await createHarness({
+			resourceLoader: {
+				...createTestResourceLoader(),
+				getPrompts: () => ({ prompts: [template], diagnostics: [] }),
+				getSkills: () => ({
+					skills: [
+						{
+							name: "test",
+							description: "Test",
+							filePath: skillPath,
+							baseDir: tempDir,
+							disableModelInvocation: false,
+							sourceInfo: createSyntheticSourceInfo(skillPath, { source: "local" }),
+						},
+					],
+					diagnostics: [],
+				}),
+			},
+		});
+		harnesses.push(harness);
+		harness.setResponses([fauxAssistantMessage("ok"), fauxAssistantMessage("ok")]);
+		await harness.session.prompt("/skill:test /ship trailing prose");
+		const prompt = getMessageText(harness.session.messages[1]);
+		expect(prompt).toContain("Skill body: /ship\n</skill>\n\nShip[] /skill:test /ship trailing prose");
+		await harness.session.prompt("/ship");
+		expect(getMessageText(harness.session.messages[3])).toBe("Ship[] /skill:test /ship");
+	});
+
+	it("protects skill wrappers prepended by input extensions and keeps input events raw", async () => {
+		const inputs: string[] = [];
+		const wrapper = '<skill name="test" location="/virtual/test">\n/ship\n</skill>';
+		const extensionsResult = await createTestExtensionsResult([
+			(pi) => {
+				pi.on("input", (event) => {
+					inputs.push(event.text);
+					return { action: "transform", text: `${wrapper}\n\n${event.text}` };
+				});
+			},
+		]);
+		const template: PromptTemplate = {
+			name: "ship",
+			description: "Ship",
+			content: "Ship[$@]",
+			filePath: "/virtual/ship.md",
+			sourceInfo: createSyntheticSourceInfo("/virtual/ship.md", { source: "local" }),
+		};
+		const harness = await createHarness({
+			resourceLoader: {
+				...createTestResourceLoader({ extensionsResult }),
+				getPrompts: () => ({ prompts: [template], diagnostics: [] }),
+			},
+		});
+		harnesses.push(harness);
+		harness.setResponses([fauxAssistantMessage("ok")]);
+		await harness.session.prompt("/ship trailing prose");
+		expect(inputs).toEqual(["/ship trailing prose"]);
+		expect(getMessageText(harness.session.messages[1])).toBe(`${wrapper}\n\nShip[] trailing prose`);
+	});
+
+	it("keeps leading extension dispatch priority without executing inline action commands", async () => {
+		const runs: string[] = [];
+		const extensionsResult = await createTestExtensionsResult([
+			(pi) => {
+				pi.registerCommand("ship", {
+					handler: async (args) => {
+						runs.push(args);
+					},
+				});
+			},
+		]);
+		const template: PromptTemplate = {
+			name: "ship",
+			description: "Ship",
+			content: "Ship",
+			filePath: "/virtual/ship.md",
+			sourceInfo: createSyntheticSourceInfo("/virtual/ship.md", { source: "local" }),
+		};
+		const harness = await createHarness({
+			resourceLoader: {
+				...createTestResourceLoader({ extensionsResult }),
+				getPrompts: () => ({ prompts: [template], diagnostics: [] }),
+			},
+		});
+		harnesses.push(harness);
+		harness.setResponses([fauxAssistantMessage("ok")]);
+		await harness.session.prompt("/ship fix typo");
+		expect(runs).toEqual(["fix typo"]);
+		expect(harness.session.messages).toEqual([]);
+		await harness.session.prompt("Please /ship and /quit");
+		expect(runs).toEqual(["fix typo"]);
+		expect(getMessageText(harness.session.messages[1])).toBe("Please Ship and /quit");
+	});
+
+	it("expands inline templates in steering and follow-ups", async () => {
+		const template: PromptTemplate = {
+			name: "ship",
+			description: "Ship",
+			content: "Ship[$@]",
+			filePath: "/virtual/ship.md",
+			sourceInfo: createSyntheticSourceInfo("/virtual/ship.md", { source: "local" }),
+		};
+		const harness = await createHarness({
+			resourceLoader: {
+				...createTestResourceLoader(),
+				getPrompts: () => ({ prompts: [template], diagnostics: [] }),
+			},
+		});
+		harnesses.push(harness);
+		await harness.session.steer("Please /ship then summarize");
+		await harness.session.followUp("Then /ship(fix) and `/ship`");
+		expect(harness.session.getSteeringMessages()).toEqual(["Please Ship[] then summarize"]);
+		expect(harness.session.getFollowUpMessages()).toEqual(["Then Ship[fix] and `/ship`"]);
+	});
+
+	it("expands initial and additional CLI print-mode prompts through the session", async () => {
+		const template: PromptTemplate = {
+			name: "ship",
+			description: "Ship",
+			content: "Ship[$@]",
+			filePath: "/virtual/ship.md",
+			sourceInfo: createSyntheticSourceInfo("/virtual/ship.md", { source: "local" }),
+		};
+		const harness = await createHarness({
+			resourceLoader: {
+				...createTestResourceLoader(),
+				getPrompts: () => ({ prompts: [template], diagnostics: [] }),
+			},
+		});
+		harnesses.push(harness);
+		harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("done")]);
+		const host = { session: harness.session, setRebindSession: () => {}, dispose: async () => {} };
+		const code = await runPrintMode(host as unknown as Parameters<typeof runPrintMode>[0], {
+			mode: "text",
+			initialMessage: "Please /ship",
+			messages: ["Then /ship(fix)"],
+		});
+		expect(code).toBe(0);
+		expect(harness.session.messages.filter((message) => message.role === "user").map(getMessageText)).toEqual([
+			"Please Ship[]",
+			"Then Ship[fix]",
+		]);
+		expect(writeRawStdout).toHaveBeenCalledWith("done\n");
+	});
+
+	it("preserves extension opt-in defaults and explicit API opt-out", async () => {
+		const template: PromptTemplate = {
+			name: "ship",
+			description: "Ship",
+			content: "Ship",
+			filePath: "/virtual/ship.md",
+			sourceInfo: createSyntheticSourceInfo("/virtual/ship.md", { source: "local" }),
+		};
+		const harness = await createHarness({
+			resourceLoader: {
+				...createTestResourceLoader(),
+				getPrompts: () => ({ prompts: [template], diagnostics: [] }),
+			},
+		});
+		harnesses.push(harness);
+		harness.setResponses([fauxAssistantMessage("ok"), fauxAssistantMessage("ok"), fauxAssistantMessage("ok")]);
+		await harness.session.sendUserMessage("Please /ship \\/ship");
+		await harness.session.sendUserMessage("Please /ship", { expandPromptTemplates: true });
+		await harness.session.prompt("Please /ship \\/ship", { expandPromptTemplates: false });
+		expect(harness.session.messages.filter((message) => message.role === "user").map(getMessageText)).toEqual([
+			"Please /ship \\/ship",
+			"Please Ship",
+			"Please /ship \\/ship",
+		]);
 	});
 
 	it("sendUserMessage can opt into prompt template expansion", async () => {

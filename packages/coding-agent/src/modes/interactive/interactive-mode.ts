@@ -184,6 +184,7 @@ import { UserMessageSelectorComponent } from "./components/user-message-selector
 import { editInExternalEditor } from "./external-editor.ts";
 import { refreshModelCatalogs } from "./model-catalog-refresh.ts";
 import { getModelSearchText } from "./model-search.ts";
+import { PromptTemplateAutocompleteProvider } from "./prompt-template-autocomplete.ts";
 import { shareSession } from "./session-share.ts";
 import {
 	getAvailableThemes,
@@ -808,16 +809,19 @@ export class InteractiveMode {
 			}
 		}
 
-		return new CombinedAutocompleteProvider(
-			[...slashCommands, ...templateCommands, ...extensionCommands, ...skillCommandList],
-			this.sessionManager.getCwd(),
-			this.fdPath,
+		return new PromptTemplateAutocompleteProvider(
+			new CombinedAutocompleteProvider(
+				[...slashCommands, ...templateCommands, ...extensionCommands, ...skillCommandList],
+				this.sessionManager.getCwd(),
+				this.fdPath,
+			),
+			this.session.promptTemplates,
 		);
 	}
 
 	private setupAutocompleteProvider(): void {
 		let provider = this.createBaseAutocompleteProvider();
-		const triggerCharacters: string[] = [];
+		const triggerCharacters: string[] = [...(provider.triggerCharacters ?? [])];
 		for (const wrapProvider of this.autocompleteProviderWrappers) {
 			provider = wrapProvider(provider);
 			triggerCharacters.push(...(provider.triggerCharacters ?? []));

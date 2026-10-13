@@ -16,9 +16,11 @@ import { getAgentDir } from "../src/config.ts";
 import {
 	expandPromptTemplate,
 	loadPromptTemplates,
+	type PromptTemplate,
 	parseCommandArgs,
 	substituteArgs,
 } from "../src/core/prompt-templates.ts";
+import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
 
 // ============================================================================
 // substituteArgs
@@ -433,6 +435,90 @@ describe("parseCommandArgs", () => {
 // ============================================================================
 
 describe("expandPromptTemplate", () => {
+	const templates: PromptTemplate[] = [
+		{
+			name: "ship",
+			description: "Ship",
+			content: "Ship[$@]",
+			filePath: "/virtual/ship.md",
+			sourceInfo: createSyntheticSourceInfo("/virtual/ship.md", { source: "local" }),
+		},
+		{
+			name: "review",
+			description: "Review",
+			content: "Review[$1|$2]",
+			filePath: "/virtual/review.md",
+			sourceInfo: createSyntheticSourceInfo("/virtual/review.md", { source: "local" }),
+		},
+		{
+			name: "nested",
+			description: "Nested",
+			content: "/ship /skill:test",
+			filePath: "/virtual/nested.md",
+			sourceInfo: createSyntheticSourceInfo("/virtual/nested.md", { source: "local" }),
+		},
+	];
+
+	test.each([
+		["Please /ship then summarize", "Please Ship[] then summarize"],
+		["Please (/ship), then /ship.", "Please (Ship[]), then Ship[]."],
+		["Please (/ship),(/ship)", "Please (Ship[]),(Ship[])"],
+		["Please (/ship),(/review)", "Please (Ship[]),(Review[|])"],
+		["/ship,/ship", "Ship[],Ship[]"],
+		["/ship(one),/ship(two)", "Ship[one],Ship[two]"],
+		["/ship hint,(/ship)", "Ship[] hint,(Ship[])"],
+		["Say \"/ship\" and '/review'", "Say \"Ship[]\" and 'Review[|]'"],
+		["/ship fix typo", "Ship[fix typo]"],
+		["/ship fix typo then /review(unclosed", "Ship[fix typo then /review(unclosed]"],
+		['/ship fix typo then /review("unclosed)', "Ship[fix typo then /review(unclosed)]"],
+		["/ship fix typo then /ship", "Ship[] fix typo then Ship[]"],
+		["/ship fix typo then /review(one)", "Ship[] fix typo then Review[one|]"],
+		['Please /review(one "two words") then /ship', "Please Review[one|two words] then Ship[]"],
+		['(/review(one "two) words"))', "(Review[one|two) words])"],
+		["Please /ship(a(b)c)", "Please Ship[a(b)c]"],
+		['Please /review("/ship" "/nested")', "Please Review[/ship|/nested]"],
+		['Please /review("\\/ship")', "Please Review[\\/ship|]"],
+		["Please /ship(args)/file", "Please /ship(args)/file"],
+		["https://host/(/ship) src/(/ship)", "https://host/(/ship) src/(/ship)"],
+		["https://host(/ship) https://host?(/ship),(/ship)", "https://host(/ship) https://host?(/ship),(/ship)"],
+		["Please /ship,https://host?/ship", "Please Ship[],https://host?/ship"],
+		["Please /ship,https://host(/ship)", "Please Ship[],https://host(/ship)"],
+		["Please /ship,src/(/ship)", "Please Ship[],src/(/ship)"],
+		["Please \\/ship(/review) then /ship", "Please /ship(/review) then Ship[]"],
+		["First /ship\n  then /ship", "First Ship[]\n  then Ship[]"],
+		["/ship() trailing prose", "Ship[] trailing prose"],
+		["Please /ship(unclosed", "Please /ship(unclosed"],
+		['Please /ship("unclosed)', 'Please /ship("unclosed)'],
+		["Please /ship(unclosed then /review", "Please /ship(unclosed then Review[|]"],
+		["/unknown and /SHIP", "/unknown and /SHIP"],
+		[
+			"src/ship /ship/file /ship.md https://host/ship https://host?/ship",
+			"src/ship /ship/file /ship.md https://host/ship https://host?/ship",
+		],
+		["Please \\/ship and \\/unknown", "Please /ship and /unknown"],
+		["\\/ship fix typo", "/ship fix typo"],
+		["\\/ship fix typo then /review", "/ship fix typo then Review[|]"],
+		["\\/ship(/review)", "/ship(/review)"],
+		["`/ship` and ``code `/ship` code`` then /ship", "`/ship` and ``code `/ship` code`` then Ship[]"],
+		["```text\n/ship\n```\nPlease /ship", "```text\n/ship\n```\nPlease Ship[]"],
+		["```/ship``` then /ship", "```/ship``` then Ship[]"],
+		["```/ship```\nPlease /ship", "```/ship```\nPlease Ship[]"],
+		["   ````/ship```` then /ship", "   ````/ship```` then Ship[]"],
+		["~~~info`\n/ship\n~~~\nPlease /ship", "~~~info`\n/ship\n~~~\nPlease Ship[]"],
+		["~~~\n/ship\n~~~\nPlease /ship", "~~~\n/ship\n~~~\nPlease Ship[]"],
+		["```\n/ship", "```\n/ship"],
+		["`\\/ship` and /ship", "`\\/ship` and Ship[]"],
+		["Please /nested and /ship", "Please /ship /skill:test and Ship[]"],
+		["/ship hint `/ship` \\/ship /unknown /ship/path", "Ship[hint `/ship` /ship /unknown /ship/path]"],
+		[
+			'<skill name="test" location="/virtual/test">\n/ship\n</skill>\n\n/ship trailing prose',
+			'<skill name="test" location="/virtual/test">\n/ship\n</skill>\n\nShip[] trailing prose',
+		],
+		['/ship <skill name="test">/ship</skill>', 'Ship[] <skill name="test">/ship</skill>'],
+	])("expands original invocations: %s", (input, expected) => {
+		expect(expandPromptTemplate(input, templates)).toBe(expected);
+	});
+
 	test("should split template arguments on unquoted newlines", () => {
 		const result = expandPromptTemplate("/arg-test label-2\n\nHere is some description #2.", [
 			{

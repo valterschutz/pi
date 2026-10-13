@@ -4,6 +4,7 @@ import { CONFIG_DIR_NAME } from "../config.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
 import type { ResourceDiagnostic } from "./diagnostics.ts";
+import { findPromptTemplateInvocations } from "./prompt-template-invocations.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 
 /**
@@ -297,24 +298,47 @@ export function loadPromptTemplates(options: LoadPromptTemplatesOptions): LoadPr
 	return { templates, diagnostics };
 }
 
-/**
- * Expand a prompt template if it matches a template name.
- * Returns the expanded content or the original text if not a template.
- */
-export function expandPromptTemplate(text: string, templates: PromptTemplate[]): string {
-	if (!text.startsWith("/")) return text;
-
-	const match = text.match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);
-	if (!match) return text;
-
-	const templateName = match[1];
-	const argsString = match[2] ?? "";
-
-	const template = templates.find((t) => t.name === templateName);
-	if (template) {
-		const args = parseCommandArgs(argsString);
-		return substituteArgs(template.content, args);
+/** Replace original template invocations in place, without rescanning inserted content. */
+export function expandPromptTemplate(
+	text: string,
+	templates: PromptTemplate[],
+	options: { allowLegacyArguments?: boolean } = {},
+): string {
+	const byName = new Map<string, PromptTemplate>();
+	for (const template of templates) {
+		if (!byName.has(template.name)) byName.set(template.name, template);
 	}
-
-	return text;
+	const { invocations, escapedSlashes } = findPromptTemplateInvocations(text, new Set(byName.keys()));
+	const edits = escapedSlashes.map((start) => ({ start, end: start + 1, content: "" }));
+	for (const invocation of invocations) {
+		let { end, args } = invocation;
+		if (
+			options.allowLegacyArguments !== false &&
+			invocations.length === 1 &&
+			invocation.start === 0 &&
+			args === undefined &&
+			/\s/.test(text[end] ?? "") &&
+			!/<skill\b/.test(text)
+		) {
+			args = text.slice(end);
+			for (const start of [...escapedSlashes].reverse()) {
+				if (start >= end) args = args.slice(0, start - end) + args.slice(start - end + 1);
+			}
+			end = text.length;
+		}
+		edits.push({
+			start: invocation.start,
+			end,
+			content: substituteArgs(byName.get(invocation.name)!.content, parseCommandArgs(args ?? "")),
+		});
+	}
+	edits.sort((a, b) => a.start - b.start);
+	let result = "";
+	let cursor = 0;
+	for (const edit of edits) {
+		if (edit.start < cursor) continue;
+		result += text.slice(cursor, edit.start) + edit.content;
+		cursor = edit.end;
+	}
+	return result + text.slice(cursor);
 }
